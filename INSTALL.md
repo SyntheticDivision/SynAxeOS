@@ -1,5 +1,7 @@
 # Install SynAxe OS v-0.0.1-beta
 
+**Very early beta.** This is test firmware. Expect rough edges, and please send feedback if you try it. Issues, email, and YouTube links are in the [README](README.md).
+
 This installs SynAxe OS onto a **StarMiner 601a 12V**. It does not replace the whole ESP-Miner tree. The installer patches that tree, then a normal `idf.py build` packs the new web UI into the firmware.
 
 Do this on **Windows 11**. The steps below match the ESP-IDF 5.5 setup used to build this beta.
@@ -64,7 +66,10 @@ You should now have these files:
 C:\Projects\StarMiner\SynAxeOS\install.ps1
 C:\Projects\StarMiner\SynAxeOS\build-synaxe.js
 C:\Projects\StarMiner\SynAxeOS\synaxe-www\index.html
+C:\Projects\StarMiner\SynAxeOS\synaxe-www\city-bg.b64
 ```
+
+`city-bg.b64` is the dashboard background. The installer turns it into `city-bg.jpg` while it copies the page. Do not delete it.
 
 ## 4. Apply the patch
 

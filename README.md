@@ -1,21 +1,34 @@
 # SynAxe OS
 
-SynAxe OS **v-0.0.1-beta** is a firmware interface and patch set for the **StarMiner 601a 12V** board. It sits on top of [StarMiner](https://github.com/tjwink/StarMiner), which is itself built from ESP-Miner. The miner still runs that ESP32-S3 firmware. SynAxe OS replaces the web UI and applies the 601a safety and display changes.
+**Very early beta.** This is v-0.0.1-beta test firmware. Expect rough edges. Feedback is welcome.
 
-This is **not** a standalone firmware tree. You clone StarMiner, then apply this repo on top of it.
+SynAxe OS is a firmware interface and patch set for the **StarMiner 601a 12V** (Bitaxe Gamma, BM1370, ESP32-S3). It sits on top of [StarMiner](https://github.com/tjwink/StarMiner), which is built from ESP-Miner. The miner still runs that firmware. SynAxe OS replaces the web page and applies the 601a display and voltage changes.
 
-## What this version is
+This is **not** a standalone firmware tree, and it is **not** a finished product. You clone StarMiner, then apply this repo on top of it.
 
-- Cyberpunk dashboard for the 601a, not the stock AxeOS layout
-- Manual overclock tab with a voltage curve, soft cap, and hard cap
+## What it is
+
+A cyberpunk dashboard for one 12V board:
+
+- Manual overclock tab with a voltage curve, a soft cap, and a hard cap
 - No auto tune and no auto update
 - Pool page with a fallback pool and a dual-pool share split
 - SynFleet scan for other ESP-Miner devices on the same subnet
 - Overheat latch, fan modes, and a watt calibration card
-- OLED boot screens: SynAxe OS, TDMC, By SyntheticDivision, then the Wi-Fi screen
+- OLED boot screens: SynAxe OS, TDMC, By SyntheticDivision, then Wi-Fi
 - Developer tab for The Division Mining Company
 
 The 15 minute hashrate is a real average. For the first minute it follows the 1 minute figure, then it fills in.
+
+## Early beta
+
+This build has only been run on one 601a. The clock curve, the watt reading, and dual pool are still being tested. Do not treat it as stable.
+
+If you try it, please say what the board did. The useful report is the clock, the core voltage, the error rate, and what the screen showed.
+
+- Open an [issue](https://github.com/SyntheticDivision/SynAxeOS/issues) on this repo
+- Email [thedivisionminingcompany@gmail.com](mailto:thedivisionminingcompany@gmail.com)
+- Or leave a note on YouTube [@SyntheticDee](https://www.youtube.com/@SyntheticDee)
 
 ## Safety
 
