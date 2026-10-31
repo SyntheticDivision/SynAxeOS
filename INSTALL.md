@@ -1,5 +1,7 @@
 # Install SynAxe OS v-0.0.1-beta
 
+**12V Gamma only.** This is for the StarMiner Bitaxe Gamma 601a on 12V. Do not install it on a 5V Gamma. A wrong board can burn the ASIC.
+
 **Very early beta.** This is test firmware. Expect rough edges, and please send feedback if you try it. Issues, email, and YouTube links are in the [README](README.md).
 
 This installs SynAxe OS onto a **StarMiner 601a 12V**. It does not replace the whole ESP-Miner tree. The installer patches that tree, then a normal `idf.py build` packs the new web UI into the firmware.
