@@ -1,5 +1,7 @@
 # SynAxe OS
 
+**12V Gamma only.** StarMiner Bitaxe Gamma 601a. Do not flash this on a 5V Gamma. A wrong board can burn the ASIC.
+
 **Very early beta.** This is v-0.0.1-beta test firmware. Expect rough edges. Feedback is welcome.
 
 SynAxe OS is a firmware interface and patch set for the **StarMiner 601a 12V** (Bitaxe Gamma, BM1370, ESP32-S3). It sits on top of [StarMiner](https://github.com/tjwink/StarMiner), which is built from ESP-Miner. The miner still runs that firmware. SynAxe OS replaces the web page and applies the 601a display and voltage changes.
