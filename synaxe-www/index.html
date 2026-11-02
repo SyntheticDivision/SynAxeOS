@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SynAxe OS</title>
+<style>
+  :root {
+    --void: #07080d;
+    --panel: rgba(14, 17, 24, 0.86);
+    --panel-2: #141922;
+    --line: #243044;
+    --cyan: #22f0ff;
+    --magenta: #ff2ea6;
+    --yellow: #ffe14a;
+    --ink: #e7f4ff;
+    --mute: #7d8ea3;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: #07080d url("city-bg.jpg") center / cover fixed no-repeat; color: var(--ink); font-family: "Segoe UI", sans-serif; }
+  body::before { content: ""; position: fixed; inset: 0; background: rgba(7, 8, 13, 0.72); pointer-events: none; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  .app { position: relative; z-index: 1; display: flex; gap: 1rem; min-height: 100vh; padding: 1rem; }
+  .side { width: 14rem; flex: 0 0 14rem; display: flex; flex-direction: column; gap: 0.6rem; padding: 0.85rem; border: 1px solid var(--yellow); border-radius: 0.85rem; background: var(--panel); box-shadow: 0 0 16px rgba(255, 225, 74, 0.25); }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand p { margin: 0; color: var(--cyan); font-size: 1.15rem; letter-spacing: 0.06em; }
+  .kicker { margin: 0; color: var(--mute); letter-spacing: 0.16em; font-size: 0.68rem; text-transform: uppercase; }
+  nav { display: flex; flex-direction: column; gap: 0.25rem; }
+  nav button { min-height: 2.75rem; text-align: left; border: 0; border-radius: 0.55rem; background: transparent; color: var(--mute); font-weight: 700; padding: 0.4rem 0.75rem; }
+  nav button.on { color: var(--cyan); background: rgba(34, 240, 255, 0.12); box-shadow: inset 0 0 0 1px var(--cyan); }
+  main { flex: 1; min-width: 0; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: 1rem; }
+  h1 { margin: 0.15rem 0 0; font-size: 2rem; letter-spacing: 0.04em; }
+  .actions, .row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .actions button, .save { min-height: 2.75rem; border: 0; border-radius: 0.55rem; background: var(--panel-2); color: var(--ink); font-weight: 700; letter-spacing: 0.06em; padding: 0 0.9rem; }
+  .actions button.on { background: var(--yellow); color: #07080d; }
+  .card button { min-height: 2.75rem; border: 1px solid var(--yellow); border-radius: 0.55rem; background: #10131a; color: #f4f7fb; font-weight: 700; letter-spacing: 0.04em; padding: 0.45rem 0.9rem; }
+  .card button.on, .card button.save { background: var(--yellow); color: #07080d; }
+  .card button:disabled { border-color: #3a4250; color: #c5ced8; background: #10131a; }
+  .banner { margin: 0 0 1rem; padding: 0.8rem 1rem; border: 1px solid var(--yellow); border-radius: 0.7rem; background: var(--panel); color: var(--yellow); }
+  .grid { display: grid; gap: 0.75rem; }
+  .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .split { grid-template-columns: 1.4fr 0.8fr; margin-top: 0.75rem; }
+  .card { border: 1px solid var(--yellow); border-radius: 0.85rem; background: var(--panel); box-shadow: 0 0 16px rgba(255, 225, 74, 0.16); padding: 1rem; }
+  .value { margin-top: 0.45rem; font-family: ui-monospace, monospace; font-size: 1.8rem; }
+  .sub, .hint { color: var(--mute); font-family: ui-monospace, monospace; font-size: 0.8rem; }
+  canvas { width: 100%; height: 220px; display: block; }
+  .line { display: flex; justify-content: space-between; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); font-family: ui-monospace, monospace; }
+  .line:last-child { border-bottom: 0; }
+  label { display: block; margin: 0.7rem 0; }
+  input[type="text"], input[type="number"], input[type="password"], select { width: 100%; margin-top: 0.3rem; background: transparent; border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.55rem 0.7rem; }
+  input[type="range"] { width: 100%; accent-color: var(--yellow); }
+  .limits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+  .bar { height: 0.45rem; background: #10131a; border-radius: 99px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--cyan); }
+  .reg { display: grid; grid-template-columns: 2.2rem 1fr 4.2rem; gap: 0.45rem; align-items: center; margin: 0.4rem 0; font-family: ui-monospace, monospace; font-size: 0.8rem; }
+  pre#log { white-space: pre-wrap; word-break: break-word; max-height: 70vh; overflow: auto; margin: .5rem 0 0; }
+  .log-err { color: var(--yellow); }
+  .card a.btn, .card a.btn-dark, label.filebtn { display: inline-flex; align-items: center; min-height: 2.75rem; margin: 0; border-radius: 0.55rem; font-weight: 700; letter-spacing: 0.04em; padding: 0.45rem 0.9rem; text-decoration: none; }
+  .card a.btn { background: var(--yellow); color: #07080d; }
+  .card a.btn-dark, label.filebtn { background: var(--panel-2); color: var(--ink); cursor: pointer; }
+  label.filebtn input { display: none; }
+  @media (max-width: 900px) {
+    .app { flex-direction: column; }
+    .side { width: 100%; flex-basis: auto; }
+    nav { flex-direction: row; overflow-x: auto; }
+    .stats, .split, .limits { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <svg width="36" height="36" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="7" fill="#07080d"/>
+        <rect x="1.25" y="1.25" width="29.5" height="29.5" rx="6" fill="none" stroke="#ffe14a" stroke-width="1.25"/>
+        <path d="M17.2 6.2 L26.4 8.4 C28.2 12.2 27.2 17.6 22.4 18.8 L17.2 14.6 Z" fill="#ff2ea6"/>
+        <path d="M26.2 8.8 C27.6 12.2 26.8 16.6 22.6 18.2" fill="none" stroke="#ffe14a" stroke-width="1"/>
+        <rect x="8.2" y="9.2" width="6.2" height="4.2" fill="#22f0ff"/>
+        <rect x="14.4" y="11.6" width="3.2" height="14.6" fill="#22f0ff"/>
+      </svg>
+      <div>
+        <p>SynAxe OS</p>
+        <p class="kicker">601A · 12V</p>
+      </div>
+    </div>
+    <nav id="nav">
+      <button type="button" data-id="dash" class="on">Dashboard</button>
+      <button type="button" data-id="tune">Tune</button>
+      <button type="button" data-id="pool">Pool</button>
+      <button type="button" data-id="fleet">SynFleet</button>
+      <button type="button" data-id="net">Network</button>
+      <button type="button" data-id="logs">Logs</button>
+      <button type="button" data-id="set">Settings</button>
+      <button type="button" data-id="dev">Developer</button>
+    </nav>
+  </aside>
+  <main>
+    <header>
+      <div>
+        <p class="kicker">601A · BM1370</p>
+        <h1>SynAxe OS</h1>
+      </div>
+      <div class="actions">
+        <button id="pause" type="button">PAUSE</button>
+        <button id="restart" type="button">RESTART</button>
+      </div>
+    </header>
+    <div id="banner"></div>
+    <div id="view"></div>
+  </main>
+</div>
+<script>
+window.onerror = function (msg) {
+  var el = document.getElementById("view");
+  if (el) el.textContent = String(msg);
+};
+const NAV = ["dash", "tune", "pool", "fleet", "net", "logs", "set", "dev"];
+const history = [];
+let info = {};
+let view = (location.hash || "#dash").slice(1);
+if (view === "oc") view = "tune";
+let formsReady = false;
+const nav = document.getElementById("nav");
+const viewEl = document.getElementById("view");
+const banner = document.getElementById("banner");
+
+nav.querySelectorAll("button").forEach((b) => {
+  b.onclick = () => {
+    view = b.dataset.id;
+    location.hash = view;
+    formsReady = false;
+    drawNav();
+    render();
+  };
+});
+
+function drawNav() {
+  nav.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.id === view));
+}
+
+function n(v, d = 0) { const x = Number(v); return Number.isFinite(x) ? x : d; }
+function hashText(gh) {
+  if (gh >= 1000) return (gh / 1000).toFixed(2) + " TH/s";
+  if (gh >= 1) return gh.toFixed(1) + " GH/s";
+  return (gh * 1000).toFixed(0) + " MH/s";
+}
+function volts(v) { return n(v) / 1000; }
+function eff(i) {
+  const gh = n(i.hashRate);
+  if (gh <= 0) return "--";
+  return (n(i.power) / (gh / 1000)).toFixed(1) + " J/TH";
+}
+function shownWatts(raw) {
+  const cal = loadCal();
+  return n(raw) * cal.scale + cal.offset;
+}
+function loadCal() {
+  try {
+    const cal = JSON.parse(localStorage.getItem("synaxe-cal") || "");
+    if (cal && Number.isFinite(cal.scale)) return cal;
+  } catch (e) {}
+  return { scale: 1, offset: 0 };
+}
+function steps(from, to, step) {
+  const list = [];
+  for (let v = from; v <= to; v += step) list.push(v);
+  return list;
+}
+const MHZ = steps(400, 650, 25);
+const MV = steps(1100, 1225, 25);
+function snap(value, list, fallback) {
+  const target = Math.round(n(value, fallback));
+  let best = list[0];
+  for (const item of list) if (Math.abs(item - target) < Math.abs(best - target)) best = item;
+  return best;
+}
+function stockClock(mhz, mv) {
+  return { frequency: snap(mhz, MHZ, 525), coreVoltage: snap(mv, MV, 1150), overclockEnabled: 0, synTune: 0 };
+}
+function railWatts(i) {
+  if (Number.isFinite(Number(i.asicPower)) && Number(i.asicPower) > 0) return Number(i.asicPower);
+  return 0;
+}
+async function api(path, opt) {
+  const r = await fetch(path, opt);
+  if (!r.ok) throw new Error(await r.text());
+  const t = await r.text();
+  try { return JSON.parse(t); } catch { return t; }
+}
+let bannerKind = "";
+let bannerTimer = 0;
+function showBanner(text, kind) {
+  clearTimeout(bannerTimer);
+  bannerKind = kind || "";
+  banner.innerHTML = text ? '<p class="banner">' + text + '</p>' : "";
+  if (kind === "flash") {
+    bannerTimer = setTimeout(() => {
+      banner.innerHTML = "";
+      bannerKind = "";
+    }, 4000);
+  }
+}
+async function save(body) {
+  await api("/api/system", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  showBanner("Saved.", "flash");
+}
+function card(label, value, sub) {
+  return '<div class="card"><p class="kicker">' + label + '</p><div class="value">' + value + '</div><div class="sub">' + (sub || "") + '</div></div>';
+}
+function diffText(v) {
+  v = n(v);
+  if (v >= 1e15) return (v / 1e15).toFixed(2) + " P";
+  if (v >= 1e12) return (v / 1e12).toFixed(2) + " T";
+  if (v >= 1e9) return (v / 1e9).toFixed(2) + " G";
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + " M";
+  if (v >= 1e3) return (v / 1e3).toFixed(2) + " k";
+  return String(Math.round(v));
+}
+function plain(s) { return String(s == null ? "" : s).replace(/[<>&"]/g, ""); }
+function line(k, v) { return '<div class="line"><span>' + k + '</span><span>' + v + '</span></div>'; }
+function registers(i) {
+  const mon = i.hashrateMonitor;
+  if (!mon || !mon.asics || !mon.asics.length) return '<p class="hint">Waiting for the ASIC registers.</p>';
+  return mon.asics.map((asic, idx) => {
+    const domains = asic.domains || [];
+    const max = Math.max(1, ...domains.map((d) => n(d)));
+    const bars = domains.map((d, j) => {
+      const gh = n(d);
+      const pct = Math.max(6, Math.min(100, (gh / max) * 100));
+      return '<div class="reg"><span>D' + (j + 1) + '</span><div class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></div><span>' + gh.toFixed(1) + '</span></div>';
+    }).join("");
+    return '<p class="hint">ASIC ' + (idx + 1) + ' · ' + n(asic.total).toFixed(1) + ' GH/s · ' + n(asic.errorCount) + ' register errors</p>' + bars;
+  }).join("");
+}
+function blockCard(i) {
+  const net = n(i.networkDifficulty);
+  const best = n(i.bestDiff);
+  const pct = net > 0 ? (best / net) * 100 : 0;
+  const total = n(i.coinbaseValueTotalSatoshis);
+  const mine = n(i.coinbaseValueUserSatoshis);
+  const share = total > 0 ? (mine / total) * 100 : 0;
+  return '<div class="card"><p class="kicker">Block header</p>'
+    + (n(i.blockFound) ? '<p class="hint">Block found on this miner.</p>' : '')
+    + line("Height", n(i.blockHeight) ? String(n(i.blockHeight)) : "--")
+    + line("Network diff", net ? diffText(net) : "--")
+    + line("Best diff", diffText(best) + (net ? " · " + (pct < 10 ? pct.toPrecision(2) : pct.toFixed(1)) + "%" : ""))
+    + line("Session best", diffText(n(i.bestSessionDiff)))
+    + line("Pool diff", diffText(n(i.poolDifficulty)))
+    + line("Coinbase", total ? (total / 1e8).toFixed(8) + " BTC" : "--")
+    + line("Your share", total ? (mine / 1e8).toFixed(8) + " BTC · " + share.toFixed(1) + "%" : "--")
+    + '<p class="hint">' + plain(i.scriptsig || "Waiting for a block template.") + '</p>'
+    + (Array.isArray(i.blockSignals) && i.blockSignals.length ? '<p class="hint">Signals ' + i.blockSignals.map(plain).join(", ") + '</p>' : '')
+    + '</div>';
+}
+
+function render() {
+  const i = info;
+  if (view === "dash") {
+    viewEl.innerHTML = '<div class="grid stats">'
+      + card("Hashrate", hashText(n(i.hashRate)), "1m " + hashText(n(i.hashRate_1m)) + "<br>15m " + (Number.isFinite(Number(i.hashRate_15m)) ? hashText(n(i.hashRate_15m)) : "--") + "<br>1h " + hashText(n(i.hashRate_1h)))
+      + card("ASIC temp", n(i.temp).toFixed(1) + " C", "VR " + n(i.vrTemp).toFixed(1) + " C")
+      + card("Input", shownWatts(i.power).toFixed(1) + " W", volts(i.voltage).toFixed(2) + " V in")
+      + card("ASIC rail", railWatts(i) > 0 ? railWatts(i).toFixed(1) + " W" : "--", "regulator output")
+      + '</div><div class="grid split"><div class="card"><p class="kicker">Hashrate trace</p><canvas id="trace" width="640" height="220"></canvas></div><div class="card"><p class="kicker">Board</p>'
+      + line("Input power", shownWatts(i.power).toFixed(1) + " W")
+      + line("ASIC rail", railWatts(i) > 0 ? railWatts(i).toFixed(1) + " W" : "--")
+      + line("Raw input", n(i.power).toFixed(1) + " W")
+      + line("Input", volts(i.voltage).toFixed(2) + " V")
+      + line("Vcore", volts(i.coreVoltageActual).toFixed(3) + " V")
+      + line("Fan", n(i.fanspeed).toFixed(0) + "%")
+      + line("Frequency", n(i.frequency).toFixed(0) + " MHz")
+      + line("Shares", n(i.sharesAccepted) + " / " + n(i.sharesRejected) + " rejected")
+      + "</div></div>"
+      + '<div class="grid split">'
+      + '<div class="card"><p class="kicker">Hashrate registers</p>' + registers(i) + '</div>'
+      + blockCard(i)
+      + '</div>';
+    drawTrace();
+    return;
+  }
+  if (view === "tune") {
+    const pick = (list, current, id, label) => {
+      const now = snap(current, list, list[0]);
+      return "<label>" + label + "<select id='" + id + "'>" + list.map((v) => "<option value='" + v + "'" + (v === now ? " selected" : "") + ">" + v + "</option>").join("") + "</select></label>";
+    };
+    const fanMode = n(i.autofanspeed) === 1 ? "auto" : "manual";
+    viewEl.innerHTML = '<div class="card"><p class="kicker">Hashrate</p><div class="value" id="ocHash">' + hashText(n(i.hashRate)) + '</div><div class="sub" id="ocHashSub">' + (n(i.expectedHashrate) ? "Expected " + hashText(n(i.expectedHashrate)) : "Live hashrate") + '</div></div>'
+      + '<div class="card" style="margin-top:.75rem"><p class="kicker">Tune</p>'
+      + '<div id="precise"></div><button class="save" id="applyClock" type="button">APPLY CLOCK</button></div>'
+      + '<div class="card" style="margin-top:.75rem"><p class="kicker">Fan</p><p class="hint">Running at ' + n(i.fanspeed).toFixed(0) + '%</p>'
+      + '<div class="row"><button type="button" data-fan="auto">AUTO</button><button type="button" data-fan="manual">MANUAL</button><button class="save" id="applyFan" type="button">APPLY FAN</button></div>'
+      + '<label id="fanLabel" style="display:none">Manual <span id="fanPct">' + n(i.manualFanSpeed, 50) + '</span>%<input id="mfan" type="range" min="20" max="100" value="' + n(i.manualFanSpeed, 50) + '"></label></div>'
+      + '<div class="card" style="margin-top:.75rem"><p class="kicker">Now</p>'
+      + line("Clock", '<span id="ocClock">' + n(i.frequency).toFixed(0) + ' MHz</span>')
+      + line("Set voltage", '<span id="ocSet">' + n(i.coreVoltage).toFixed(0) + ' mV</span>')
+      + line("Measured ASIC", '<span id="ocVcore">' + volts(i.coreVoltageActual).toFixed(3) + ' V</span>')
+      + line("Input power", '<span id="ocPower">' + shownWatts(i.power).toFixed(2) + ' W</span>')
+      + line("Error", '<span id="ocErr">' + n(i.errorPercentage).toFixed(2) + ' %</span>')
+      + "</div>";
+    document.getElementById("precise").innerHTML = pick(MHZ, i.frequency || 525, "stockF", "Frequency MHz") + pick(MV, i.coreVoltage || 1150, "stockV", "Core mV");
+    document.getElementById("applyClock").onclick = async () => {
+      const clock = stockClock(val("stockF"), val("stockV"));
+      await save(clock);
+    };
+    let mode = fanMode;
+    const paintFan = () => {
+      document.querySelectorAll("[data-fan]").forEach((b) => b.classList.toggle("on", b.dataset.fan === mode));
+      document.getElementById("fanLabel").style.display = mode === "manual" ? "block" : "none";
+    };
+    document.querySelectorAll("[data-fan]").forEach((b) => b.onclick = () => { mode = b.dataset.fan; paintFan(); });
+    document.getElementById("mfan").oninput = (e) => { document.getElementById("fanPct").textContent = e.target.value; };
+    document.getElementById("applyFan").onclick = async () => {
+      await save({
+        autofanspeed: mode === "auto" ? 1 : 0,
+        manualFanSpeed: n(document.getElementById("mfan").value)
+      });
+      showBanner("Fan applied.", "flash");
+    };
+    paintFan();
+    return;
+  }
+  if (view === "pool") {
+    const proto = JSON.parse(localStorage.getItem("synaxe-proto") || '{"primary":"v1","fallback":"v1"}');
+    const pProto = proto.primary === "v2" ? "v2" : "v1";
+    const fProto = proto.fallback === "v2" ? "v2" : "v1";
+    const protoSelect = (id, current) => '<label>Protocol<select id="' + id + '"><option value="v1"' + (current === "v1" ? " selected" : "") + '>Stratum V1</option><option value="v2"' + (current === "v2" ? " selected" : "") + '>Stratum V2</option></select></label>';
+    viewEl.innerHTML = '<div class="card"><p class="kicker">Pools</p><p class="hint">Pool 1 is primary. Pool 2 is used only if Pool 1 does not connect. Pick Stratum V1 or Stratum V2. V1 uses port 3333. V2 uses port 3334 unless you type another.</p></div>'
+      + '<div class="card" style="margin-top:.75rem"><p class="kicker">Pool 1 <span id="p1badge"></span></p>'
+      + protoSelect("pproto", pProto)
+      + field("Stratum host", "url", i.stratumURL || "pool.gobrrr.me")
+      + field("Port", "port", i.stratumPort || (pProto === "v2" ? 3334 : 3333), "number")
+      + field("User", "user", i.stratumUser || "bc1qkcpmuwuxnqgwhfgrc9t3lq447m0dj99tlj6qje.synaxedev")
+      + field("Password", "pass", "x", "text")
+      + '<p class="hint" id="p1stat"></p>'
+      + '</div><div class="card" style="margin-top:.75rem"><p class="kicker">Pool 2 <span id="p2badge"></span></p>'
+      + protoSelect("fproto", fProto)
+      + field("Stratum host", "furl", i.fallbackStratumURL || "solo.ckpool.org")
+      + field("Port", "fport", i.fallbackStratumPort || (fProto === "v2" ? 3334 : 3333), "number")
+      + field("User", "fuser", i.fallbackStratumUser || "bc1qkcpmuwuxnqgwhfgrc9t3lq447m0dj99tlj6qje.synaxedev")
+      + field("Password", "fpass", "x", "text")
+      + '<p class="hint" id="p2stat"></p>'
+      + '<button class="save" id="savePool" type="button">SAVE AND RESTART</button></div>';
+    const steps = (kind, host, port, user) => {
+      if (!String(host).includes(".") || !Number(port) || !String(user).trim()) return "Will not connect. Host, port, and user are required.";
+      return kind === "v2"
+        ? "Stratum V2 ready. SetupConnection, OpenStandardMiningChannel, NewMiningJob."
+        : "Stratum V1 ready. mining.subscribe, mining.authorize, mining.notify.";
+    };
+    const paintPool = () => {
+      const p = document.getElementById("pproto").value;
+      const f = document.getElementById("fproto").value;
+      const port = document.getElementById("port");
+      const fport = document.getElementById("fport");
+      if (p === "v2" && port.value === "3333") port.value = "3334";
+      if (p === "v1" && port.value === "3334") port.value = "3333";
+      if (f === "v2" && fport.value === "3333") fport.value = "3334";
+      if (f === "v1" && fport.value === "3334") fport.value = "3333";
+      const pOk = String(val("url")).includes(".") && Number(val("port")) && String(val("user")).trim();
+      const fOk = String(val("furl")).includes(".") && Number(val("fport")) && String(val("fuser")).trim();
+      document.getElementById("p1stat").textContent = steps(p, val("url"), val("port"), val("user"));
+      document.getElementById("p2stat").textContent = steps(f, val("furl"), val("fport"), val("fuser"));
+      document.getElementById("p1badge").textContent = (pOk ? "PRIMARY" : "DOWN") + " · " + (pOk ? hashText(n(i.hashRate)) : hashText(0));
+      document.getElementById("p2badge").textContent = (pOk ? "FALLBACK" : fOk ? "FALLBACK LIVE" : "DOWN") + " · " + (!pOk && fOk ? hashText(n(i.hashRate)) : hashText(0));
+    };
+    document.getElementById("pproto").onchange = paintPool;
+    document.getElementById("fproto").onchange = paintPool;
+    ["url", "port", "user", "furl", "fport", "fuser"].forEach((id) => {
+      document.getElementById(id).oninput = paintPool;
+    });
+    paintPool();
+    document.getElementById("savePool").onclick = async () => {
+      const p = document.getElementById("pproto").value === "v2" ? "v2" : "v1";
+      const f = document.getElementById("fproto").value === "v2" ? "v2" : "v1";
+      localStorage.setItem("synaxe-proto", JSON.stringify({ primary: p, fallback: f }));
+      localStorage.removeItem("synaxe-dual");
+      await save({
+        stratumURL: val("url"), stratumPort: n(val("port")), stratumUser: val("user"), stratumPassword: val("pass"),
+        fallbackStratumURL: val("furl"), fallbackStratumPort: n(val("fport")), fallbackStratumUser: val("fuser"), fallbackStratumPassword: val("fpass")
+      });
+      await api("/api/system/restart", { method: "POST" });
+    };
+    return;
+  }
+  if (view === "fleet") {
+    viewEl.innerHTML = '<div class="card"><p class="kicker">SynFleet</p><p class="hint">This miner, plus any ESP-Miner found on the same subnet.</p><div id="fleet"></div><button class="save" id="scan" type="button">SCAN</button></div>';
+    document.getElementById("fleet").innerHTML = deviceCard(i, "This miner");
+    document.getElementById("scan").onclick = scan;
+    return;
+  }
+  if (view === "net") {
+    viewEl.innerHTML = '<div class="card"><p class="kicker">Network</p>' + field("Wi-Fi name", "ssid", i.ssid) + field("Wi-Fi password", "wifi", "", "password") + field("Hostname", "host", i.hostname) + '<p class="hint">Address ' + (i.ipv4 || "") + '</p><button class="save" id="saveNet" type="button">SAVE AND RESTART</button></div>';
+    document.getElementById("saveNet").onclick = async () => {
+      const body = { ssid: val("ssid"), hostname: val("host") };
+      if (val("wifi")) body.wifiPass = val("wifi");
+      await save(body);
+      await api("/api/system/restart", { method: "POST" });
+    };
+    return;
+  }
+  if (view === "logs") {
+    viewEl.innerHTML = '<div class="card"><p class="kicker">Logs</p><p class="hint">Newest first.</p><button id="clearLogs" type="button">CLEAR LOGS</button><pre id="log">Loading</pre></div>';
+    const paintLogs = (t) => {
+      const raw = typeof t === "string" ? t : JSON.stringify(t, null, 2);
+      const esc = (s) => String(s).replace(/[&<>]/g, (c) => c === "&" ? "&" : c === "<" ? "<" : ">");
+      const lines = raw.split(/\r?\n/).filter((line) => line.trim() !== "").reverse();
+      const box = document.getElementById("log");
+      if (!box) return;
+      box.innerHTML = lines.length ? lines.map((line) => {
+        const bad = /^E \(|\b(error|fail|fault)\b/i.test(line);
+        const safe = esc(line);
+        return bad ? '<span class="log-err">' + safe + "</span>" : safe;
+      }).join("\n") : "No logs.";
+    };
+    const loadLogs = () => api("/api/system/logs").then(paintLogs).catch((e) => {
+      const box = document.getElementById("log");
+      if (box) box.textContent = e.message;
+    });
+    document.getElementById("clearLogs").onclick = async () => {
+      const box = document.getElementById("log");
+      if (box) box.textContent = "Clearing";
+      try {
+        await api("/api/system/logs/clear", { method: "POST" });
+        await loadLogs();
+      } catch (e) {
+        if (box) box.textContent = e.message;
+      }
+    };
+    loadLogs();
+    return;
+  }
+  if (view === "set") {
+    const cal = loadCal();
+    const held = n(i.overheat_mode) === 1;
+    viewEl.innerHTML = '<div class="card"><p class="kicker">Overheat</p><p class="hint">A latched overheat holds the clock at 400 MHz and the fan at 100% until you bypass it. A reboot stays held.</p>'
+      + '<p class="hint">' + (held ? "Held at minimum." : "Not latched.") + '</p>'
+      + '<button id="bypass" type="button"' + (held ? "" : " disabled") + '>BYPASS OVERHEAT ERROR</button></div>'
+      + '<div class="card" style="margin-top:.75rem"><p class="kicker">Input watts</p><p class="hint">Match the 12 V jack to a meter. Capture idle, then capture while hashing.</p>'
+      + line("Raw", n(i.power).toFixed(2) + " W")
+      + line("Shown", shownWatts(i.power).toFixed(2) + " W")
+      + line("ASIC rail", railWatts(i) > 0 ? railWatts(i).toFixed(2) + " W" : "--")
+      + line("Scale", cal.scale.toFixed(3))
+      + line("Offset", cal.offset.toFixed(2) + " W")
+      + field("Meter reading W", "meter", "", "text")
+      + '<div class="row"><button id="capIdle" type="button">CAPTURE IDLE</button><button id="capHash" type="button">CAPTURE HASHING</button></div></div>'
+      + '<p class="hint">Clock, voltage, and the fan are on the Tune tab.</p>';
+    const points = { idle: null, hash: null };
+    const fit = () => {
+      if (!points.idle || !points.hash || Math.abs(points.hash.raw - points.idle.raw) < 0.3) return;
+      const scale = (points.hash.meter - points.idle.meter) / (points.hash.raw - points.idle.raw);
+      const offset = points.idle.meter - points.idle.raw * scale;
+      if (Number.isFinite(scale) && Number.isFinite(offset)) {
+        localStorage.setItem("synaxe-cal", JSON.stringify({ scale: scale, offset: offset }));
+        showBanner("Watt fit saved.", "flash");
+      }
+    };
+    const capture = (kind) => {
+      const meter = Number(val("meter"));
+      if (!Number.isFinite(meter) || meter <= 0) return;
+      points[kind] = { raw: n(i.power), meter: meter };
+      fit();
+    };
+    document.getElementById("capIdle").onclick = () => capture("idle");
+    document.getElementById("capHash").onclick = () => capture("hash");
+    document.getElementById("bypass").onclick = async () => { await save({ overheat_mode: 0 }); };
+    return;
+  }
+  viewEl.innerHTML = '<div class="card"><p class="kicker">SynAxe OS</p><p class="value" style="font-size:1.15rem;color:var(--cyan)">v-0.0.1-beta</p>'
+    + '<p class="hint">601a · 12V · BM1370. Auto-update is removed. Export the pool, fan, clock, and watt calibration before you flash.</p>'
+    + line("ESP-IDF", plain(i.idfVersion || ""))
+    + line("MAC", plain(i.macAddr || ""))
+    + '<div class="row" style="margin-top:.75rem"><button class="save" id="exportSet" type="button">EXPORT SETTINGS</button><label class="filebtn">IMPORT SETTINGS<input id="importSet" type="file" accept="application/json,.json"></label></div>'
+    + '<p class="hint" id="devNote"></p></div>'
+    + '<div class="card" style="margin-top:.75rem"><p class="kicker">The Division Mining Company</p><p class="hint">Questions and support go to the same inbox. Each link opens a new message.</p>'
+    + '<div class="row"><a class="btn" href="mailto:thedivisionminingcompany@gmail.com?subject=SynAxe%20OS%20question">QUESTIONS</a><a class="btn-dark" href="mailto:thedivisionminingcompany@gmail.com?subject=SynAxe%20OS%20support">SUPPORT</a></div>'
+    + '<p class="hint" style="color:var(--yellow)">thedivisionminingcompany@gmail.com</p></div>'
+    + '<div class="card" style="margin-top:.75rem"><p class="kicker">Channel</p><a class="btn" href="https://www.youtube.com/@SyntheticDee" target="_blank" rel="noreferrer">YOUTUBE · @SyntheticDee</a>'
+    + '<p class="hint">SyntheticDivision. Miner tests, teardowns, and thermals.</p></div>';
+  document.getElementById("exportSet").onclick = () => {
+    const fanMode = n(i.autofanspeed) === 1 ? "auto" : (n(i.manualFanSpeed) >= 100 ? "oc" : "manual");
+    const file = {
+      build: "v-0.0.1-beta",
+      board: "601a",
+      pool: {
+        mode: "failover",
+        primary: { host: i.stratumURL || "", port: String(i.stratumPort || ""), user: i.stratumUser || "", pass: "x", proto: (JSON.parse(localStorage.getItem("synaxe-proto") || '{"primary":"v1"}').primary === "v2" ? "v2" : "v1") },
+        fallback: { host: i.fallbackStratumURL || "", port: String(i.fallbackStratumPort || ""), user: i.fallbackStratumUser || "", pass: "x", proto: (JSON.parse(localStorage.getItem("synaxe-proto") || '{"fallback":"v1"}').fallback === "v2" ? "v2" : "v1") }
+      },
+      net: { ssid: i.ssid || "", host: i.hostname || "" },
+      fan: { mode: fanMode, speed: n(i.manualFanSpeed, 50) },
+      clock: { overclock: n(i.overclockEnabled) === 1, mhz: n(i.frequency), mv: n(i.coreVoltage) },
+      watts: loadCal()
+    };
+    const blob = new Blob([JSON.stringify(file, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "synaxe-os-v-0.0.1-beta.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  document.getElementById("importSet").onchange = (event) => {
+    const picked = event.target.files && event.target.files[0];
+    event.target.value = "";
+    const note = document.getElementById("devNote");
+    if (!picked) return;
+    picked.text().then(async (text) => {
+      let file;
+      try { file = JSON.parse(text); } catch (e) { file = null; }
+      const pool = file && file.pool;
+      const ok = file && file.board === "601a" && pool && pool.primary && pool.fallback && file.net && file.fan && file.clock;
+      if (!ok) {
+        note.textContent = "That file is not a SynAxe 601a settings file.";
+        return;
+      }
+      localStorage.removeItem("synaxe-dual");
+      if (pool.primary.proto || pool.fallback.proto) {
+        localStorage.setItem("synaxe-proto", JSON.stringify({
+          primary: pool.primary.proto === "v2" ? "v2" : "v1",
+          fallback: pool.fallback.proto === "v2" ? "v2" : "v1"
+        }));
+      }
+      if (file.watts && Number.isFinite(Number(file.watts.scale)) && Number.isFinite(Number(file.watts.offset))) {
+        localStorage.setItem("synaxe-cal", JSON.stringify({ scale: Number(file.watts.scale), offset: Number(file.watts.offset) }));
+      }
+      const body = {
+        stratumURL: pool.primary.host, stratumPort: n(pool.primary.port), stratumUser: pool.primary.user, stratumPassword: pool.primary.pass || "x",
+        fallbackStratumURL: pool.fallback.host, fallbackStratumPort: n(pool.fallback.port), fallbackStratumUser: pool.fallback.user, fallbackStratumPassword: pool.fallback.pass || "x",
+        ssid: file.net.ssid, hostname: file.net.host,
+        autofanspeed: file.fan.mode === "auto" ? 1 : 0,
+        manualFanSpeed: file.fan.mode === "oc" ? 100 : n(file.fan.speed, 50),
+        frequency: stockClock(file.clock.mhz, file.clock.mv).frequency, coreVoltage: stockClock(file.clock.mhz, file.clock.mv).coreVoltage, overclockEnabled: 0, synTune: 0
+      };
+      await save(body);
+      const restartNeeded = body.ssid !== i.ssid || body.hostname !== i.hostname || body.stratumURL !== i.stratumURL || body.stratumUser !== i.stratumUser;
+      note.textContent = restartNeeded ? "Settings loaded. Restarting so the pool and network take effect." : "Settings loaded.";
+      if (restartNeeded) await api("/api/system/restart", { method: "POST" });
+    }).catch(() => { note.textContent = "Could not read that file."; });
+  };
+}
+function field(label, id, value, type) {
+  const safe = String(value == null ? "" : value).split('"').join("");
+  return "<label>" + label + "<input id='" + id + "' type='" + (type || "text") + "' value='" + safe + "'></label>";
+}
+function val(id) { return document.getElementById(id).value; }
+function deviceCard(d, title) {
+  return '<div class="line"><span>' + title + '</span><span>' + (d.hostname || "") + " · " + hashText(n(d.hashRate)) + " · " + n(d.power).toFixed(1) + " W</span></div>";
+}
+async function scan() {
+  const ip = info.ipv4 || "";
+  const parts = ip.split(".");
+  if (parts.length !== 4) return;
+  const base = parts.slice(0, 3).join(".");
+  const mine = n(parts[3]);
+  const box = document.getElementById("fleet");
+  const found = [deviceCard(info, "This miner")];
+  const targets = [];
+  for (let o = Math.max(1, mine - 16); o <= Math.min(254, mine + 16); o++) if (o !== mine) targets.push(base + "." + o);
+  await Promise.all(targets.map(async (host) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 700);
+    try {
+      const r = await fetch("http://" + host + "/api/system/info", { signal: ctrl.signal });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d && d.hostname) found.push(deviceCard(d, host));
+    } catch (e) {}
+    clearTimeout(t);
+  }));
+  if (box) box.innerHTML = found.join("");
+}
+function drawTrace() {
+  const c = document.getElementById("trace");
+  if (!c) return;
+  const g = c.getContext("2d");
+  g.clearRect(0, 0, c.width, c.height);
+  if (history.length < 2) return;
+  const max = Math.max(...history), min = Math.min(...history);
+  g.strokeStyle = "#22f0ff";
+  g.lineWidth = 2;
+  g.beginPath();
+  history.forEach((v, idx) => {
+    const x = (idx / (history.length - 1)) * c.width;
+    const y = c.height - ((v - min) / ((max - min) || 1)) * (c.height - 16) - 8;
+    idx ? g.lineTo(x, y) : g.moveTo(x, y);
+  });
+  g.stroke();
+}
+async function tick() {
+  try {
+    info = await api("/api/system/info");
+    history.push(n(info.hashRate));
+    if (history.length > 60) history.shift();
+    const pause = document.getElementById("pause");
+    pause.textContent = info.miningPaused ? "RESUME" : "PAUSE";
+    pause.classList.toggle("on", !!info.miningPaused);
+    if (n(info.overheat_mode) === 1) showBanner("OVERHEAT. Clock is held at 400 MHz until you press Bypass Overheat in Settings.", "hold");
+    else if (bannerKind === "hold" || bannerKind === "error") showBanner("", "");
+    const typing = document.activeElement && ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName);
+    const live = view === "dash" || view === "fleet";
+    if (!typing && (live || !formsReady)) {
+      render();
+      if (!live) formsReady = true;
+    } else if (view === "dash") drawTrace();
+    else if (view === "tune") {
+      const hashEl = document.getElementById("ocHash");
+      if (hashEl) hashEl.textContent = hashText(n(info.hashRate));
+      const subEl = document.getElementById("ocHashSub");
+      if (subEl) subEl.textContent = n(info.expectedHashrate) ? "Expected " + hashText(n(info.expectedHashrate)) : "Live hashrate";
+      const clockEl = document.getElementById("ocClock");
+      if (clockEl) clockEl.textContent = n(info.frequency).toFixed(0) + " MHz";
+      const setEl = document.getElementById("ocSet");
+      if (setEl) setEl.textContent = n(info.coreVoltage).toFixed(0) + " mV";
+      const vcoreEl = document.getElementById("ocVcore");
+      if (vcoreEl) vcoreEl.textContent = volts(info.coreVoltageActual).toFixed(3) + " V";
+      const powerEl = document.getElementById("ocPower");
+      if (powerEl) powerEl.textContent = shownWatts(info.power).toFixed(2) + " W";
+      const errEl = document.getElementById("ocErr");
+      if (errEl) errEl.textContent = n(info.errorPercentage).toFixed(2) + " %";
+    }
+  } catch (e) {
+    showBanner("Unable to reach the miner.", "error");
+  }
+}
+document.getElementById("pause").onclick = async () => {
+  await api(info.miningPaused ? "/api/system/resume" : "/api/system/pause", { method: "POST" });
+  tick();
+};
+document.getElementById("restart").onclick = async () => { await api("/api/system/restart", { method: "POST" }); };
+drawNav();
+render();
+tick();
+setInterval(tick, 2000);
+localStorage.removeItem("synaxe-page-tune");
+</script>
+</body>
+</html>
