@@ -1,0 +1,11 @@
+SynAxe OS v-0.0.1-beta for the Bitaxe Gamma 601a 12V only.
+Base is official ESP-Miner v2.14.2, not StarMiner.
+
+Install from C:\Projects\synaxe-setup\SynAxeOS with fresh.ps1, then build.ps1 and flash.ps1.
+Do not use the folder named "SynAxe OS".
+
+The page on the miner is synaxe-www/index.html.
+Tune is 400 to 650 MHz and 1100 to 1225 mV, both in steps of 25.
+There is no free-form overclock and no dual-pool mode.
+The setup Wi-Fi screen says SynAxe. The network name is synaxe_ plus the last of the MAC.
+Stuck test banners are removed. A saved note clears itself.
