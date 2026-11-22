@@ -4,7 +4,7 @@
 
 **Very early beta.** This is v-0.0.1-beta test firmware. Expect rough edges. Feedback is welcome.
 
-SynAxe OS is a firmware interface and patch set for the **Bitaxe Gamma 601a 12V** (BM1370, ESP32-S3). It sits on top of [ESP-Miner](https://github.com/bitaxeorg/ESP-Miner). Official ESP-Miner treats a Gamma as a 5V board. This patch adds board `601a` and forces the 12V input limits: on at 11.0V, off at 10.5V, input overvoltage fault at 14.0V. The page and the firmware will not go above 650 MHz or outside 1100 to 1225 mV, and only in steps of 25. A saved clock off those steps is pulled back on boot. Firmware and web updates are refused, so this build cannot be replaced from the page. A saved 5V profile cannot change those input limits.
+SynAxe OS is a firmware interface and patch set for the **Bitaxe Gamma 601a 12V** (BM1370, ESP32-S3). It sits on top of [ESP-Miner](https://github.com/bitaxeorg/ESP-Miner). Official ESP-Miner treats a Gamma as a 5V board. This patch adds board `601a` and forces the 12V input limits: on at 11.0V, off at 10.5V, input overvoltage fault at 14.0V. A locked clock uses the same BM1370 lists as AxeOS. Unlock custom to type other numbers. The core command stops at 1520 mV so the regulator fault stays under 1.60V. Firmware and web updates are refused, so this build cannot be replaced from the page. A saved 5V profile cannot change those input limits.
 
 This is **not** a standalone firmware tree, and it is **not** a finished product. You clone ESP-Miner, then apply this repo on top of it.
 
@@ -12,10 +12,11 @@ This is **not** a standalone firmware tree, and it is **not** a finished product
 
 A cyberpunk dashboard for one 12V board:
 
-- Tune tab only. Frequency is 400 to 650 MHz in 25 MHz steps. Core voltage is 1100 to 1225 mV in 25 mV steps. There is no free-form overclock.
-- No auto tune and no auto update
+- Tune tab. Locked frequency and core voltage use the AxeOS BM1370 lists. Unlock custom for other numbers. There is no auto tune.
+- ASIC temperature is the EMC2101 external diode. VR die is the TPS546 on-die sensor. The chart can plot any two of hashrate, ASIC temp, VR die, and fan speed.
+- No auto update
 - One pool, with a Stratum V1 or Stratum V2 choice. No dual-pool mode.
-- SynFleet scan for other ESP-Miner devices on the same subnet
+- SynFleet works like AxeOS swarm: it scans the subnet, keeps the boards that answer, and lets you add one by IP.
 - Overheat latch, fan controls on the Tune tab, and a watt calibration card
 - OLED boot: SynAxe, then TDMC, then By SyntheticDivision. If Wi-Fi is not set, the setup screen says SynAxe and the network is synaxe_ plus the last of the MAC.
 - Developer tab for The Division Mining Company
@@ -24,7 +25,7 @@ The 15 minute hashrate is a real average. For the first minute it follows the 1 
 
 ## Early beta
 
-This build has only been run on one 601a. The safe clock stops at 650 MHz and 1225 mV because higher settings trip the voltage regulator. Do not treat it as stable.
+This build has only been run on one 601a. A locked clock follows the AxeOS list, up to 625 MHz and 1250 mV. Higher custom voltage can still trip the regulator. Do not treat it as stable.
 
 If you try it, please say what the board did. The useful report is the clock, the core voltage, the error rate, and what the screen showed.
 
@@ -34,9 +35,7 @@ If you try it, please say what the board did. The useful report is the clock, th
 
 ## Safety
 
-This build is for the **Bitaxe Gamma 601a 12V** only. Do not flash it onto a 5V Gamma. Official ESP-Miner would program the input overvoltage fault at 6.5V, which turns the regulator off on a 12V supply. The 601a profile uses 11.0V on, 10.5V off, and 14.0V overvoltage. The clock stops at 650 MHz. Core voltage is 1100 to 1225 mV in 25 mV steps.
-
-The Tune tab only offers 400 to 650 MHz and 1100 to 1225 mV, both in steps of 25.
+This build is for the **Bitaxe Gamma 601a 12V** only. Do not flash it onto a 5V Gamma. Official ESP-Miner would program the input overvoltage fault at 6.5V, which turns the regulator off on a 12V supply. The 601a profile uses 11.0V on, 10.5V off, and 14.0V overvoltage. Locked core voltage stops at 1250 mV. Custom core voltage stops at 1520 mV.
 
 ## Install
 

@@ -6,7 +6,7 @@
 
 This installs SynAxe OS onto official [ESP-Miner](https://github.com/bitaxeorg/ESP-Miner) for a **601a 12V** board. It does not replace the whole tree. The installer patches that tree, then a normal `idf.py build` packs the new web UI into the firmware.
 
-Official ESP-Miner has no `601a` board. Its Gamma 601 profile is 5V, and the input overvoltage fault is 6.5V. On a 12V supply that fault turns the regulator off. The installer adds board `601a` and locks the input to 11.0V on, 10.5V off, and 14.0V overvoltage. The clock is 400 to 650 MHz in 25 MHz steps. Core voltage is 1100 to 1225 mV in 25 mV steps. Firmware and web updates are refused. Do not point this patch at a 5V Gamma.
+Official ESP-Miner has no `601a` board. Its Gamma 601 profile is 5V, and the input overvoltage fault is 6.5V. On a 12V supply that fault turns the regulator off. The installer adds board `601a` and locks the input to 11.0V on, 10.5V off, and 14.0V overvoltage. Locked frequency and core voltage use the AxeOS BM1370 lists. Custom values are available after Unlock custom, and the core command stops at 1520 mV. Firmware and web updates are refused. Do not point this patch at a 5V Gamma.
 
 Do this on **Windows 11**. The steps below match the ESP-IDF 5.5 setup used to build this beta.
 

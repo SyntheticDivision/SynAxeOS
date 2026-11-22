@@ -119,6 +119,14 @@ window.onerror = function (msg) {
 };
 const NAV = ["dash", "tune", "pool", "fleet", "net", "logs", "set", "dev"];
 const history = [];
+const TRACES = [
+  { id: "hash", label: "Hashrate", color: "#22f0ff" },
+  { id: "asic", label: "ASIC temp", color: "#ff4ad8" },
+  { id: "vr", label: "VR die", color: "#ffe14a" },
+  { id: "fan", label: "Fan speed", color: "#7CFF6B" }
+];
+let traceLeft = "hash";
+let traceRight = "asic";
 let info = {};
 let view = (location.hash || "#dash").slice(1);
 if (view === "oc") view = "tune";
@@ -164,13 +172,8 @@ function loadCal() {
   } catch (e) {}
   return { scale: 1, offset: 0 };
 }
-function steps(from, to, step) {
-  const list = [];
-  for (let v = from; v <= to; v += step) list.push(v);
-  return list;
-}
-const MHZ = steps(400, 650, 25);
-const MV = steps(1100, 1225, 25);
+const MHZ = [400, 490, 525, 550, 600, 625];
+const MV = [1000, 1060, 1100, 1150, 1200, 1250];
 function snap(value, list, fallback) {
   const target = Math.round(n(value, fallback));
   let best = list[0];
@@ -180,6 +183,10 @@ function snap(value, list, fallback) {
 function stockClock(mhz, mv) {
   return { frequency: snap(mhz, MHZ, 525), coreVoltage: snap(mv, MV, 1150), overclockEnabled: 0, synTune: 0 };
 }
+function axeUnlocked(i) {
+  return customClock || n(i && i.overclockEnabled) === 1 || location.search.indexOf("oc") !== -1;
+}
+let customClock = false;
 function railWatts(i) {
   if (Number.isFinite(Number(i.asicPower)) && Number(i.asicPower) > 0) return Number(i.asicPower);
   return 0;
@@ -261,15 +268,17 @@ function render() {
   if (view === "dash") {
     viewEl.innerHTML = '<div class="grid stats">'
       + card("Hashrate", hashText(n(i.hashRate)), "1m " + hashText(n(i.hashRate_1m)) + "<br>15m " + (Number.isFinite(Number(i.hashRate_15m)) ? hashText(n(i.hashRate_15m)) : "--") + "<br>1h " + hashText(n(i.hashRate_1h)))
-      + card("ASIC temp", n(i.temp).toFixed(1) + " C", "VR " + n(i.vrTemp).toFixed(1) + " C")
+      + card("ASIC", n(i.temp).toFixed(1) + " C", "board sensor")
+      + card("VR die", n(i.vrTemp).toFixed(1) + " C", "TPS546 on-die")
       + card("Input", shownWatts(i.power).toFixed(1) + " W", volts(i.voltage).toFixed(2) + " V in")
       + card("ASIC rail", railWatts(i) > 0 ? railWatts(i).toFixed(1) + " W" : "--", "regulator output")
-      + '</div><div class="grid split"><div class="card"><p class="kicker">Hashrate trace</p><canvas id="trace" width="640" height="220"></canvas></div><div class="card"><p class="kicker">Board</p>'
+      + '</div><div class="grid split"><div class="card"><p class="kicker">Trace</p><div class="row"><label>Left <select id="traceL">' + traceOptions(traceLeft, traceRight) + '</select></label><label>Right <select id="traceR">' + traceOptions(traceRight, traceLeft) + '</select></label></div><canvas id="trace" width="640" height="240"></canvas><p class="hint" id="traceRead"></p></div><div class="card"><p class="kicker">Board</p>'
       + line("Input power", shownWatts(i.power).toFixed(1) + " W")
       + line("ASIC rail", railWatts(i) > 0 ? railWatts(i).toFixed(1) + " W" : "--")
       + line("Raw input", n(i.power).toFixed(1) + " W")
       + line("Input", volts(i.voltage).toFixed(2) + " V")
       + line("Vcore", volts(i.coreVoltageActual).toFixed(3) + " V")
+      + line("VR die", n(i.vrTemp).toFixed(1) + " C")
       + line("Fan", n(i.fanspeed).toFixed(0) + "%")
       + line("Frequency", n(i.frequency).toFixed(0) + " MHz")
       + line("Shares", n(i.sharesAccepted) + " / " + n(i.sharesRejected) + " rejected")
@@ -279,17 +288,27 @@ function render() {
       + blockCard(i)
       + '</div>';
     drawTrace();
+    const leftSel = document.getElementById("traceL");
+    const rightSel = document.getElementById("traceR");
+    if (leftSel) leftSel.onchange = () => { traceLeft = leftSel.value; if (traceLeft === traceRight) traceRight = otherTrace(traceLeft); render(); };
+    if (rightSel) rightSel.onchange = () => { traceRight = rightSel.value; if (traceRight === traceLeft) traceLeft = otherTrace(traceRight); render(); };
     return;
   }
   if (view === "tune") {
+    const unlocked = axeUnlocked(i);
     const pick = (list, current, id, label) => {
       const now = snap(current, list, list[0]);
       return "<label>" + label + "<select id='" + id + "'>" + list.map((v) => "<option value='" + v + "'" + (v === now ? " selected" : "") + ">" + v + "</option>").join("") + "</select></label>";
     };
+    const numberField = (id, label, value) => "<label>" + label + "<input id='" + id + "' type='number' min='1' value='" + Math.round(n(value)) + "'></label>";
     const fanMode = n(i.autofanspeed) === 1 ? "auto" : "manual";
     viewEl.innerHTML = '<div class="card"><p class="kicker">Hashrate</p><div class="value" id="ocHash">' + hashText(n(i.hashRate)) + '</div><div class="sub" id="ocHashSub">' + (n(i.expectedHashrate) ? "Expected " + hashText(n(i.expectedHashrate)) : "Live hashrate") + '</div></div>'
       + '<div class="card" style="margin-top:.75rem"><p class="kicker">Tune</p>'
-      + '<div id="precise"></div><button class="save" id="applyClock" type="button">APPLY CLOCK</button></div>'
+      + '<div id="precise"></div>'
+      + (unlocked ? '<p class="hint">Custom frequency and core voltage. Same unlock as AxeOS. Values outside the list can trip the regulator.</p>' : '')
+      + '<button class="save" id="applyClock" type="button">APPLY CLOCK</button>'
+      + (unlocked ? '' : '<button id="unlockClock" type="button">UNLOCK CUSTOM</button>')
+      + '</div>'
       + '<div class="card" style="margin-top:.75rem"><p class="kicker">Fan</p><p class="hint">Running at ' + n(i.fanspeed).toFixed(0) + '%</p>'
       + '<div class="row"><button type="button" data-fan="auto">AUTO</button><button type="button" data-fan="manual">MANUAL</button><button class="save" id="applyFan" type="button">APPLY FAN</button></div>'
       + '<label id="fanLabel" style="display:none">Manual <span id="fanPct">' + n(i.manualFanSpeed, 50) + '</span>%<input id="mfan" type="range" min="20" max="100" value="' + n(i.manualFanSpeed, 50) + '"></label></div>'
@@ -297,13 +316,23 @@ function render() {
       + line("Clock", '<span id="ocClock">' + n(i.frequency).toFixed(0) + ' MHz</span>')
       + line("Set voltage", '<span id="ocSet">' + n(i.coreVoltage).toFixed(0) + ' mV</span>')
       + line("Measured ASIC", '<span id="ocVcore">' + volts(i.coreVoltageActual).toFixed(3) + ' V</span>')
+      + line("VR die", '<span id="ocVr">' + n(i.vrTemp).toFixed(1) + ' C</span>')
       + line("Input power", '<span id="ocPower">' + shownWatts(i.power).toFixed(2) + ' W</span>')
       + line("Error", '<span id="ocErr">' + n(i.errorPercentage).toFixed(2) + ' %</span>')
       + "</div>";
-    document.getElementById("precise").innerHTML = pick(MHZ, i.frequency || 525, "stockF", "Frequency MHz") + pick(MV, i.coreVoltage || 1150, "stockV", "Core mV");
+    document.getElementById("precise").innerHTML = unlocked
+      ? numberField("stockF", "Frequency", i.frequency || 525) + numberField("stockV", "Core Voltage", i.coreVoltage || 1150)
+      : pick(MHZ, i.frequency || 525, "stockF", "Frequency") + pick(MV, i.coreVoltage || 1150, "stockV", "Core Voltage");
     document.getElementById("applyClock").onclick = async () => {
-      const clock = stockClock(val("stockF"), val("stockV"));
-      await save(clock);
+      if (unlocked) await save({ frequency: n(val("stockF")), coreVoltage: n(val("stockV")), overclockEnabled: 1, synTune: 0 });
+      else await save(stockClock(val("stockF"), val("stockV")));
+      showBanner("Clock applied.", "flash");
+    };
+    const unlock = document.getElementById("unlockClock");
+    if (unlock) unlock.onclick = async () => {
+      customClock = true;
+      await save({ overclockEnabled: 1 });
+      render();
     };
     let mode = fanMode;
     const paintFan = () => {
@@ -385,9 +414,29 @@ function render() {
     return;
   }
   if (view === "fleet") {
-    viewEl.innerHTML = '<div class="card"><p class="kicker">SynFleet</p><p class="hint">This miner, plus any ESP-Miner found on the same subnet.</p><div id="fleet"></div><button class="save" id="scan" type="button">SCAN</button></div>';
-    document.getElementById("fleet").innerHTML = deviceCard(i, "This miner");
-    document.getElementById("scan").onclick = scan;
+    if (!swarmReady) loadSwarm();
+    viewEl.innerHTML = '<div class="card"><p class="kicker">SynFleet</p><p class="hint" id="fleetStatus"></p><div id="fleetTotals"></div><div id="fleet"></div>'
+      + '<div class="row" style="margin-top:.75rem"><button class="save" id="scan" type="button">AUTO SCAN</button><button id="refreshFleet" type="button">REFRESH <span id="fleetCount"></span></button></div>'
+      + '<label>Refresh <span id="fleetEveryLabel">' + refreshTimeSet + ' s</span><input id="fleetEvery" type="range" min="5" max="30" value="' + refreshTimeSet + '"></label>'
+      + '<div class="row"><input id="addIp" placeholder="Add device by IP"><button id="addDev" type="button">ADD</button></div></div>';
+    document.getElementById("scan").onclick = scanNetwork;
+    document.getElementById("refreshFleet").onclick = () => refreshList();
+    document.getElementById("addDev").onclick = addDevice;
+    document.getElementById("fleetEvery").oninput = (e) => {
+      refreshTimeSet = Math.min(30, Math.max(5, n(e.target.value, 30)));
+      refreshLeft = refreshTimeSet;
+      localStorage.setItem(SWARM_REFRESH_TIME, String(refreshTimeSet));
+      document.getElementById("fleetEveryLabel").textContent = refreshTimeSet + " s";
+    };
+    paintSwarm();
+    formsReady = true;
+    if (!swarmTimer) {
+      swarmTimer = setInterval(swarmClock, 1000);
+      if (swarm == null) {
+        swarm = [];
+        scanNetwork();
+      } else if (swarm.length) refreshList();
+    }
     return;
   }
   if (view === "net") {
@@ -545,61 +594,358 @@ function field(label, id, value, type) {
   return "<label>" + label + "<input id='" + id + "' type='" + (type || "text") + "' value='" + safe + "'></label>";
 }
 function val(id) { return document.getElementById(id).value; }
-function deviceCard(d, title) {
-  return '<div class="line"><span>' + title + '</span><span>' + (d.hostname || "") + " · " + hashText(n(d.hashRate)) + " · " + n(d.power).toFixed(1) + " W</span></div>";
+const SWARM_DATA = "SWARM_DATA";
+const SWARM_REFRESH_TIME = "SWARM_REFRESH_TIME";
+let swarm = null;
+let swarmReady = false;
+let scanning = false;
+let refreshing = false;
+let refreshTimeSet = 30;
+let refreshLeft = 30;
+let swarmTimer = 0;
+function loadSwarm() {
+  const saved = Number(localStorage.getItem(SWARM_REFRESH_TIME));
+  refreshTimeSet = saved >= 5 && saved <= 30 ? saved : 30;
+  refreshLeft = refreshTimeSet;
+  try {
+    const data = JSON.parse(localStorage.getItem(SWARM_DATA) || "null");
+    swarm = Array.isArray(data) ? data : null;
+  } catch (e) {
+    swarm = null;
+  }
+  swarmReady = true;
 }
-async function scan() {
-  const ip = info.ipv4 || "";
-  const parts = ip.split(".");
-  if (parts.length !== 4) return;
-  const base = parts.slice(0, 3).join(".");
-  const mine = n(parts[3]);
+function saveSwarm() {
+  localStorage.setItem(SWARM_DATA, JSON.stringify(swarm || []));
+}
+function ipToInt(ip) {
+  return ip.split(".").reduce((acc, octet) => ((acc << 8) + Number(octet)) >>> 0, 0) >>> 0;
+}
+function intToIp(value) {
+  return ((value >>> 24) & 255) + "." + ((value >>> 16) & 255) + "." + ((value >>> 8) & 255) + "." + (value & 255);
+}
+function scanAddress() {
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(location.hostname)) return location.hostname;
+  return info.ipv4 || "";
+}
+function subnetIps(ip) {
+  const ipInt = ipToInt(ip);
+  const mask = ipToInt("255.255.255.0");
+  const network = (ipInt & mask) >>> 0;
+  const broadcast = (network | (~mask >>> 0)) >>> 0;
+  const ips = [];
+  for (let i = network + 1; i < broadcast; i++) ips.push(intToIp(i));
+  return ips;
+}
+function deviceModelOf(data) {
+  const board = data && data.boardVersion != null ? String(data.boardVersion) : "";
+  if (board.length > 1) {
+    if (board[0] === "1" || board === "2.2") return "Max";
+    if (board[0] === "2" || board === "0.11") return "Ultra";
+    if (board[0] === "3") return "UltraHex";
+    if (board[0] === "4") return "Supra";
+    if (board[0] === "6") return "Gamma";
+    if (board[0] === "8") return "GammaTurbo";
+  }
+  return "Other";
+}
+function swarmColor(model) {
+  return { Max: "#ff4d4d", Ultra: "#c084fc", Supra: "#60a5fa", UltraHex: "#fb923c", Gamma: "#4ade80", GammaTurbo: "#22f0ff" }[model] || "#9aa0a6";
+}
+function mergeDevice(IP, existing, infoBody, asic) {
+  const merged = Object.assign({ IP: IP }, existing || {}, infoBody || {}, asic || {});
+  merged.IP = IP;
+  merged.deviceModel = merged.deviceModel || deviceModelOf(merged);
+  merged.swarmColor = merged.swarmColor || swarmColor(merged.deviceModel);
+  merged.asicCount = merged.asicCount || 1;
+  if (!merged.poolDifficulty && infoBody) merged.poolDifficulty = infoBody.stratumDiff;
+  if (!merged.hashRate && infoBody) merged.hashRate = infoBody.hashRate_10m;
+  return merged;
+}
+async function fetchDevice(IP, needAsic) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 5000);
+  try {
+    const infoRes = await fetch("http://" + IP + "/api/system/info", { signal: ctrl.signal, cache: "no-store" });
+    if (!infoRes.ok) return null;
+    const infoBody = await infoRes.json();
+    let asic = {};
+    if (needAsic) {
+      try {
+        const asicRes = await fetch("http://" + IP + "/api/system/asic", { signal: ctrl.signal, cache: "no-store" });
+        if (asicRes.ok) asic = await asicRes.json();
+      } catch (e) {}
+    }
+    const existing = (swarm || []).find((device) => device.IP === IP) || {};
+    return mergeDevice(IP, existing, infoBody, asic);
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function mapLimit(items, limit, worker) {
+  const out = new Array(items.length);
+  let cursor = 0;
+  const runners = [];
+  const count = Math.min(limit, items.length);
+  for (let nRun = 0; nRun < count; nRun++) {
+    runners.push((async () => {
+      while (cursor < items.length) {
+        const index = cursor++;
+        out[index] = await worker(items[index]);
+      }
+    })());
+  }
+  await Promise.all(runners);
+  return out;
+}
+async function scanNetwork() {
+  if (scanning) return;
+  const base = scanAddress();
+  const status = document.getElementById("fleetStatus");
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(base)) {
+    if (status) status.textContent = "This miner has no address yet.";
+    return;
+  }
+  scanning = true;
+  paintSwarm();
+  const found = await mapLimit(subnetIps(base), 128, (ip) => fetchDevice(ip, true));
+  if (!Array.isArray(swarm)) swarm = [];
+  const existing = new Set(swarm.map((item) => item.IP));
+  found.forEach((item) => {
+    if (item && item.IP && !existing.has(item.IP)) swarm.push(item);
+  });
+  saveSwarm();
+  scanning = false;
+  refreshLeft = refreshTimeSet;
+  paintSwarm();
+}
+async function refreshList() {
+  if (scanning || refreshing || !swarm || !swarm.length) return;
+  refreshing = true;
+  refreshLeft = refreshTimeSet;
+  paintSwarm();
+  const ips = swarm.map((device) => device.IP);
+  const result = await mapLimit(ips, 128, async (ip) => {
+    const device = await fetchDevice(ip, false);
+    if (device) return device;
+    const existing = swarm.find((item) => item.IP === ip) || { IP: ip };
+    return Object.assign({}, existing, { hashRate: 0, power: 0, temp: 0, bestDiff: 0, uptimeSeconds: 0 });
+  });
+  swarm = result;
+  saveSwarm();
+  refreshing = false;
+  paintSwarm();
+}
+async function addDevice() {
+  const input = document.getElementById("addIp");
+  const IP = input ? input.value.trim() : "";
+  if (!IP) return;
+  if (!Array.isArray(swarm)) swarm = [];
+  if (swarm.some((item) => item.IP === IP)) {
+    showBanner(IP + " is already in SynFleet.", "flash");
+    return;
+  }
+  const device = await fetchDevice(IP, true);
+  if (!device || !device.ASICModel) {
+    showBanner("No ESP-Miner answered at " + IP + ".", "error");
+    return;
+  }
+  swarm.push(device);
+  saveSwarm();
+  input.value = "";
+  refreshLeft = refreshTimeSet;
+  paintSwarm();
+}
+function removeDevice(IP) {
+  swarm = (swarm || []).filter((device) => device.IP !== IP);
+  saveSwarm();
+  paintSwarm();
+}
+function paintSwarm() {
   const box = document.getElementById("fleet");
-  const found = [deviceCard(info, "This miner")];
-  const targets = [];
-  for (let o = Math.max(1, mine - 16); o <= Math.min(254, mine + 16); o++) if (o !== mine) targets.push(base + "." + o);
-  await Promise.all(targets.map(async (host) => {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 700);
-    try {
-      const r = await fetch("http://" + host + "/api/system/info", { signal: ctrl.signal });
-      if (!r.ok) return;
-      const d = await r.json();
-      if (d && d.hostname) found.push(deviceCard(d, host));
-    } catch (e) {}
-    clearTimeout(t);
-  }));
-  if (box) box.innerHTML = found.join("");
+  const status = document.getElementById("fleetStatus");
+  const totals = document.getElementById("fleetTotals");
+  const scanBtn = document.getElementById("scan");
+  const refreshBtn = document.getElementById("refreshFleet");
+  const count = document.getElementById("fleetCount");
+  if (scanBtn) {
+    scanBtn.textContent = scanning ? "SCANNING" : "AUTO SCAN";
+    scanBtn.disabled = scanning;
+  }
+  if (refreshBtn) refreshBtn.disabled = refreshing || !swarm || !swarm.length;
+  if (count) count.textContent = !refreshing && swarm && swarm.length ? String(refreshLeft) : "";
+  if (!box) return;
+  if (!swarm || !swarm.length) {
+    if (status) status.textContent = scanning ? "Scanning the subnet. Devices that answer are added." : "Scan your network for devices or add a device manually by using its IP address.";
+    if (totals) totals.innerHTML = "";
+    box.innerHTML = "";
+    return;
+  }
+  const hash = swarm.reduce((sum, device) => sum + n(device.hashRate), 0);
+  const power = swarm.reduce((sum, device) => sum + n(device.power), 0);
+  const best = swarm.reduce((max, device) => Math.max(max, n(device.bestDiff)), 0);
+  if (status) status.textContent = scanning ? "Scanning. New devices are added to the ones already saved." : "Saved in this browser, the same way AxeOS swarm does.";
+  if (totals) totals.innerHTML = '<div class="row"><span>Devices ' + swarm.length + '</span><span>' + hashText(hash) + '</span><span>' + power.toFixed(1) + ' W</span><span>Best ' + best.toFixed(0) + '</span></div>';
+  const selfIp = info.ipv4 || location.hostname;
+  box.innerHTML = swarm.map((device) => {
+    const self = device.IP === selfIp ? " · this device" : "";
+    const model = (device.deviceModel || "Other") + (device.ASICModel ? " " + device.ASICModel : "");
+    return '<div class="line"><span><a href="http://' + device.IP + '">' + (device.hostname || device.IP) + '</a>' + self + '<br><span class="hint">' + device.IP + " · " + model + '</span></span><span>' + hashText(n(device.hashRate)) + " · " + n(device.power).toFixed(1) + ' W <button type="button" data-act="identify" data-ip="' + device.IP + '">IDENTIFY</button> <button type="button" data-act="remove" data-ip="' + device.IP + '">REMOVE</button></span></div>';
+  }).join("");
+  box.querySelectorAll("button").forEach((button) => {
+    button.onclick = async () => {
+      if (button.dataset.act === "remove") removeDevice(button.dataset.ip);
+      if (button.dataset.act === "identify") {
+        try {
+          await fetch("http://" + button.dataset.ip + "/api/system/identify", { method: "POST" });
+          showBanner("Identify sent to " + button.dataset.ip + ".", "flash");
+        } catch (e) {
+          showBanner("Could not identify " + button.dataset.ip + ".", "error");
+        }
+      }
+    };
+  });
+}
+function swarmClock() {
+  if (view !== "fleet" || scanning || refreshing || !swarm || !swarm.length) return;
+  refreshLeft -= 1;
+  if (refreshLeft <= 0) refreshList();
+  else {
+    const count = document.getElementById("fleetCount");
+    if (count) count.textContent = String(refreshLeft);
+  }
+}
+function otherTrace(id) {
+  const next = TRACES.find((item) => item.id !== id);
+  return next ? next.id : "hash";
+}
+function traceOptions(selected, blocked) {
+  return TRACES.map((item) => "<option value='" + item.id + "'" + (item.id === selected ? " selected" : "") + (item.id === blocked ? " disabled" : "") + ">" + item.label + "</option>").join("");
+}
+function traceMeta(id) {
+  return TRACES.find((item) => item.id === id) || TRACES[0];
+}
+function smoothSeries(key) {
+  const raw = history.map((sample) => n(sample[key]));
+  const out = [raw[0]];
+  for (let i = 1; i < raw.length; i++) out.push(out[i - 1] + (raw[i] - out[i - 1]) * 0.32);
+  return out;
+}
+function seriesDomain(values) {
+  const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const peak = Math.max.apply(null, values);
+  const floor = Math.min.apply(null, values);
+  const span = Math.max(peak - floor, Math.abs(avg) * 0.08, 0.5);
+  const mid = (peak + floor) / 2;
+  return [mid - span / 2, mid + span / 2];
+}
+function traceText(id, value) {
+  if (id === "hash") return hashText(value);
+  if (id === "fan") return value.toFixed(0) + " %";
+  return value.toFixed(1) + " C";
 }
 function drawTrace() {
   const c = document.getElementById("trace");
   if (!c) return;
   const g = c.getContext("2d");
-  g.clearRect(0, 0, c.width, c.height);
-  if (history.length < 2) return;
-  const max = Math.max(...history), min = Math.min(...history);
-  g.strokeStyle = "#22f0ff";
-  g.lineWidth = 2;
-  g.beginPath();
-  history.forEach((v, idx) => {
-    const x = (idx / (history.length - 1)) * c.width;
-    const y = c.height - ((v - min) / ((max - min) || 1)) * (c.height - 16) - 8;
-    idx ? g.lineTo(x, y) : g.moveTo(x, y);
-  });
-  g.stroke();
+  const w = c.width;
+  const h = c.height;
+  const padL = 46;
+  const padR = 46;
+  const padT = 16;
+  const padB = 18;
+  g.clearRect(0, 0, w, h);
+  g.strokeStyle = "rgba(255,225,74,.28)";
+  g.lineWidth = 1;
+  g.font = "11px monospace";
+  for (let row = 0; row <= 4; row++) {
+    const y = padT + ((h - padT - padB) * row) / 4;
+    g.beginPath();
+    g.moveTo(padL, y);
+    g.lineTo(w - padR, y);
+    g.stroke();
+  }
+  const read = document.getElementById("traceRead");
+  if (history.length < 2) {
+    if (read) read.textContent = "Waiting for samples.";
+    return;
+  }
+  const left = smoothSeries(traceLeft);
+  const right = smoothSeries(traceRight);
+  const cols = Math.min(6, history.length - 1);
+  for (let col = 0; col <= cols; col++) {
+    const x = padL + ((w - padL - padR) * col) / cols;
+    g.beginPath();
+    g.moveTo(x, padT);
+    g.lineTo(x, h - padB);
+    g.stroke();
+  }
+  const [lMin, lMax] = seriesDomain(left);
+  const [rMin, rMax] = seriesDomain(right);
+  const plot = (values, min, max) => values.map((value, idx) => ({
+    x: padL + (idx / (values.length - 1)) * (w - padL - padR),
+    y: padT + (1 - (value - min) / ((max - min) || 1)) * (h - padT - padB)
+  }));
+  const paint = (pts, color) => {
+    g.strokeStyle = color;
+    g.fillStyle = color;
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      const prev = pts[i - 1];
+      const cur = pts[i];
+      g.quadraticCurveTo(prev.x, prev.y, (prev.x + cur.x) / 2, (prev.y + cur.y) / 2);
+    }
+    g.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+    g.stroke();
+    pts.forEach((pt) => {
+      g.beginPath();
+      g.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+      g.fill();
+    });
+  };
+  const leftPts = plot(left, lMin, lMax);
+  const rightPts = plot(right, rMin, rMax);
+  paint(leftPts, traceMeta(traceLeft).color);
+  paint(rightPts, traceMeta(traceRight).color);
+  g.fillStyle = traceMeta(traceLeft).color;
+  g.fillText(lMax.toFixed(traceLeft === "hash" ? 0 : 1), 4, padT + 8);
+  g.fillText(lMin.toFixed(traceLeft === "hash" ? 0 : 1), 4, h - padB);
+  g.fillStyle = traceMeta(traceRight).color;
+  g.textAlign = "right";
+  g.fillText(rMax.toFixed(traceRight === "hash" ? 0 : 1), w - 4, padT + 8);
+  g.fillText(rMin.toFixed(traceRight === "hash" ? 0 : 1), w - 4, h - padB);
+  g.textAlign = "left";
+  const last = history[history.length - 1];
+  if (read) read.textContent = traceMeta(traceLeft).label + " " + traceText(traceLeft, n(last[traceLeft])) + "   " + traceMeta(traceRight).label + " " + traceText(traceRight, n(last[traceRight]));
+  c.onmousemove = (ev) => {
+    const rect = c.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) * (w / rect.width);
+    let nearest = 0;
+    let best = Infinity;
+    leftPts.forEach((pt, idx) => {
+      const dist = Math.abs(pt.x - x);
+      if (dist < best) { best = dist; nearest = idx; }
+    });
+    const sample = history[nearest];
+    if (read && sample) read.textContent = traceMeta(traceLeft).label + " " + traceText(traceLeft, n(sample[traceLeft])) + "   " + traceMeta(traceRight).label + " " + traceText(traceRight, n(sample[traceRight]));
+  };
 }
 async function tick() {
   try {
     info = await api("/api/system/info");
-    history.push(n(info.hashRate));
+    history.push({ hash: n(info.hashRate), asic: n(info.temp), vr: n(info.vrTemp), fan: n(info.fanspeed) });
     if (history.length > 60) history.shift();
     const pause = document.getElementById("pause");
     pause.textContent = info.miningPaused ? "RESUME" : "PAUSE";
     pause.classList.toggle("on", !!info.miningPaused);
     if (n(info.overheat_mode) === 1) showBanner("OVERHEAT. Clock is held at 400 MHz until you press Bypass Overheat in Settings.", "hold");
     else if (bannerKind === "hold" || bannerKind === "error") showBanner("", "");
-    const typing = document.activeElement && ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName);
-    const live = view === "dash" || view === "fleet";
+    const typing = document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
+    const live = view === "dash";
     if (!typing && (live || !formsReady)) {
       render();
       if (!live) formsReady = true;
@@ -615,6 +961,8 @@ async function tick() {
       if (setEl) setEl.textContent = n(info.coreVoltage).toFixed(0) + " mV";
       const vcoreEl = document.getElementById("ocVcore");
       if (vcoreEl) vcoreEl.textContent = volts(info.coreVoltageActual).toFixed(3) + " V";
+      const vrEl = document.getElementById("ocVr");
+      if (vrEl) vrEl.textContent = n(info.vrTemp).toFixed(1) + " C";
       const powerEl = document.getElementById("ocPower");
       if (powerEl) powerEl.textContent = shownWatts(info.power).toFixed(2) + " W";
       const errEl = document.getElementById("ocErr");

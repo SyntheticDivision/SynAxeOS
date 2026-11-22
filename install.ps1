@@ -289,6 +289,27 @@ if ($screen2.Contains($welcomeOld)) {
 }
 [System.IO.File]::WriteAllText($screenPath, $screen2, $utf8)
 Write-Host "screen.c contains create_scr_by_line"
+$screen2 = [System.IO.File]::ReadAllText($screenPath)
+if (-not $screen2.Contains("current_vr_temp")) {
+    $screen2 = $screen2.Replace("static float current_chip_temp;", "static float current_chip_temp;`r`nstatic float current_vr_temp;")
+}
+$screen2 = [regex]::Replace($screen2, 'if \(current_chip_temp != power_management->chip_temp_avg\) \{.*?\r?\n        current_chip_temp = power_management->chip_temp_avg;\r?\n    \}', @'
+if (current_chip_temp != power_management->chip_temp_avg || current_vr_temp != power_management->vr_temp) {
+        if (power_management->vr_temp > 0) {
+            lv_label_set_text_fmt(stats_temp_label, "%.0f ASIC  %.0f VR", power_management->chip_temp_avg, power_management->vr_temp);
+        } else if (power_management->chip_temp_avg > 0) {
+            lv_label_set_text_fmt(stats_temp_label, "Temp: %.1f C", power_management->chip_temp_avg);
+        }
+        current_chip_temp = power_management->chip_temp_avg;
+        current_vr_temp = power_management->vr_temp;
+    }
+'@, 1)
+if (-not $screen2.Contains("current_vr_temp != power_management->vr_temp")) {
+    Write-Host "Could not put the TPS546 die temperature on the display."
+    exit 1
+}
+[System.IO.File]::WriteAllText($screenPath, $screen2, $utf8)
+Write-Host "The display shows the board sensor and the TPS546 on-die temperature."
 
 $connectPath = Join-Path $root "components\connect\connect.c"
 $connect = [System.IO.File]::ReadAllText($connectPath)
@@ -369,8 +390,14 @@ if ($oldTree) {
         $vcoreText = $vcoreText.Replace("ESP_RETURN_ON_ERROR(TPS546_set_vout(core_voltage * voltage_domains), TAG, `"TPS546 set voltage failed!`");", @'
 float volts = core_voltage;
         if (volts != 0.0f && GLOBAL_STATE->DEVICE_CONFIG.family.id == GAMMA_12V) {
-            if (volts < 1.10f) volts = 1.10f;
-            if (volts > 1.225f) volts = 1.225f;
+            bool custom = nvs_config_get_bool(NVS_CONFIG_OVERCLOCK_ENABLED);
+            if (custom) {
+                if (volts < 0.70f) volts = 0.70f;
+                if (volts > 1.52f) volts = 1.52f;
+            } else {
+                if (volts < 1.00f) volts = 1.00f;
+                if (volts > 1.25f) volts = 1.25f;
+            }
             if (volts != core_voltage) ESP_LOGW(TAG, "601a core clamped from %.3fV to %.3fV", core_voltage, volts);
         }
         ESP_RETURN_ON_ERROR(TPS546_set_vout(volts * voltage_domains), TAG, "TPS546 set voltage failed!");
@@ -392,7 +419,7 @@ float volts = core_voltage;
         exit 1
     }
     [System.IO.File]::WriteAllText($tps, $tpsText, $utf8)
-    Write-Host "601a core command stops at 1225 mV and 650 MHz. Input is 11.0V on, 10.5V off, 14.0V overvoltage."
+    Write-Host "601a input is 11.0V on, 10.5V off, 14.0V overvoltage. Locked core is the AxeOS list, 1000 to 1250 mV."
 }
 
 if (-not $oldTree) {
@@ -499,7 +526,7 @@ if (-not $tpsText.Contains("TPS546_CONFIG_GAMMA_12V") -or -not $tpsText.Contains
     exit 1
 }
 [System.IO.File]::WriteAllText($tps, $tpsText, $utf8)
-Write-Host "601a input is 11.0V on, 10.5V off, 14.0V overvoltage. Core command is 1100 to 1225 mV. Clock is 400 to 650 MHz."
+Write-Host "601a input is 11.0V on, 10.5V off, 14.0V overvoltage. Locked core is 1000 to 1250 mV. Custom core stops at 1520 mV so the 105% fault stays under 1.60V."
 
 $vcore = Join-Path $root "main\power\vcore.c"
 $vcoreText = [System.IO.File]::ReadAllText($vcore)
@@ -526,8 +553,14 @@ if (-not $vcoreText.Contains("601a core clamped")) {
     $vcoreText = $vcoreText.Replace("ESP_RETURN_ON_ERROR(TPS546_set_vout(core_voltage * voltage_domains), TAG, `"TPS546 set voltage failed!`");", @'
 float volts = core_voltage;
         if (volts != 0.0f && GLOBAL_STATE->DEVICE_CONFIG.family.id == GAMMA_12V) {
-            if (volts < 1.10f) volts = 1.10f;
-            if (volts > 1.225f) volts = 1.225f;
+            bool custom = nvs_config_get_bool(NVS_CONFIG_OVERCLOCK_ENABLED);
+            if (custom) {
+                if (volts < 0.70f) volts = 0.70f;
+                if (volts > 1.52f) volts = 1.52f;
+            } else {
+                if (volts < 1.00f) volts = 1.00f;
+                if (volts > 1.25f) volts = 1.25f;
+            }
             if (volts != core_voltage) ESP_LOGW(TAG, "601a core clamped from %.3fV to %.3fV", core_voltage, volts);
         }
         ESP_RETURN_ON_ERROR(TPS546_set_vout(volts * voltage_domains), TAG, "TPS546 set voltage failed!");
@@ -542,7 +575,7 @@ if (-not $vcoreText.Contains("601a is a 12V Gamma") -or -not $vcoreText.Contains
 
 $pm = Join-Path $root "main\tasks\power_management_task.c"
 $pmText = [System.IO.File]::ReadAllText($pm)
-if (-not $pmText.Contains("601a voltage and clock clamp")) {
+if (-not $pmText.Contains("601a axeos clock") -and -not $pmText.Contains("601a voltage and clock clamp")) {
     $inserted = $false
     foreach ($needle in @(
         "float asic_frequency = nvs_config_get_float(NVS_CONFIG_ASIC_FREQUENCY);",
@@ -551,17 +584,29 @@ if (-not $pmText.Contains("601a voltage and clock clamp")) {
         if ($pmText.Contains($needle)) {
             $pmText = $pmText.Replace($needle, $needle + @'
 
-        /* 601a voltage and clock clamp */
-        /* 601a 25 MHz steps */
-        if (GLOBAL_STATE->DEVICE_CONFIG.family.id == GAMMA_12V) {
+        /* 601a axeos clock */
+        if (GLOBAL_STATE->DEVICE_CONFIG.family.id == GAMMA_12V && !nvs_config_get_bool(NVS_CONFIG_OVERCLOCK_ENABLED)) {
+            const uint16_t axe_mhz[] = {400, 490, 525, 550, 600, 625};
+            const uint16_t axe_mv[] = {1000, 1060, 1100, 1150, 1200, 1250};
             uint16_t saved_voltage = core_voltage;
             float saved_frequency = asic_frequency;
-            if (core_voltage > 1225) core_voltage = 1225;
-            if (core_voltage < 1100) core_voltage = 1100;
-            core_voltage = (uint16_t)(((core_voltage + 12) / 25) * 25);
-            if (asic_frequency > 650.0f) asic_frequency = 650.0f;
-            if (asic_frequency < 400.0f) asic_frequency = 400.0f;
-            asic_frequency = (float)(((int)(asic_frequency + 12.5f) / 25) * 25);
+            uint16_t best_mv = axe_mv[0];
+            uint16_t best_mhz = axe_mhz[0];
+            int i;
+            for (i = 0; i < 6; i++) {
+                int dv = (int)axe_mv[i] - (int)core_voltage;
+                int bv = (int)best_mv - (int)core_voltage;
+                if (dv < 0) dv = -dv;
+                if (bv < 0) bv = -bv;
+                if (dv < bv) best_mv = axe_mv[i];
+                int df = (int)axe_mhz[i] - (int)asic_frequency;
+                int bf = (int)best_mhz - (int)asic_frequency;
+                if (df < 0) df = -df;
+                if (bf < 0) bf = -bf;
+                if (df < bf) best_mhz = axe_mhz[i];
+            }
+            core_voltage = best_mv;
+            asic_frequency = (float)best_mhz;
             if (core_voltage != saved_voltage) {
                 nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, core_voltage);
                 ESP_LOGW(TAG, "601a voltage held at %u mV", core_voltage);
@@ -576,7 +621,7 @@ if (-not $pmText.Contains("601a voltage and clock clamp")) {
             break
         }
     }
-    if (-not $inserted -or -not $pmText.Contains("601a voltage and clock clamp")) {
+    if (-not $inserted -or -not $pmText.Contains("601a axeos clock")) {
         Write-Host "Could not add the 601a runtime clamp."
         exit 1
     }
@@ -585,28 +630,44 @@ if (-not $pmText.Contains("601a voltage and clock clamp")) {
 
 $nvs = Join-Path $root "main\nvs_config.c"
 $nvsText = [System.IO.File]::ReadAllText($nvs)
-$nvsText = $nvsText.Replace('.rest_name = "frequency",                          .min = 400,  .max = 690}', '.rest_name = "frequency",                          .min = 400,  .max = 650}')
-$nvsText = $nvsText.Replace('.rest_name = "frequency",                          .min = 1,  .max = UINT16_MAX}', '.rest_name = "frequency",                          .min = 400,  .max = 650}')
-$nvsText = $nvsText.Replace('.rest_name = "frequency",                          .min = 400,  .max = 600}', '.rest_name = "frequency",                          .min = 400,  .max = 650}')
-$nvsText = $nvsText.Replace('.rest_name = "frequency",                          .min = 400,  .max = 1100}', '.rest_name = "frequency",                          .min = 400,  .max = 650}')
-$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1000,  .max = 1225}', '.rest_name = "coreVoltage",                        .min = 1100,  .max = 1225}')
-$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1,  .max = UINT16_MAX}', '.rest_name = "coreVoltage",                        .min = 1100,  .max = 1225}')
-$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1000,  .max = 1150}', '.rest_name = "coreVoltage",                        .min = 1100,  .max = 1225}')
-$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1000,  .max = 1300}', '.rest_name = "coreVoltage",                        .min = 1100,  .max = 1225}')
-$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1000,  .max = 1325}', '.rest_name = "coreVoltage",                        .min = 1100,  .max = 1225}')
-$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1000,  .max = 1400}', '.rest_name = "coreVoltage",                        .min = 1100,  .max = 1225}')
+$nvsText = $nvsText.Replace('.rest_name = "frequency",                          .min = 400,  .max = 650}', '.rest_name = "frequency",                          .min = 1,  .max = UINT16_MAX}')
+$nvsText = $nvsText.Replace('.rest_name = "frequency",                          .min = 400,  .max = 690}', '.rest_name = "frequency",                          .min = 1,  .max = UINT16_MAX}')
+$nvsText = $nvsText.Replace('.rest_name = "frequency",                          .min = 400,  .max = 600}', '.rest_name = "frequency",                          .min = 1,  .max = UINT16_MAX}')
+$nvsText = $nvsText.Replace('.rest_name = "frequency",                          .min = 400,  .max = 1100}', '.rest_name = "frequency",                          .min = 1,  .max = UINT16_MAX}')
+$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1100,  .max = 1225}', '.rest_name = "coreVoltage",                        .min = 1,  .max = UINT16_MAX}')
+$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1000,  .max = 1225}', '.rest_name = "coreVoltage",                        .min = 1,  .max = UINT16_MAX}')
+$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1000,  .max = 1150}', '.rest_name = "coreVoltage",                        .min = 1,  .max = UINT16_MAX}')
+$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1000,  .max = 1300}', '.rest_name = "coreVoltage",                        .min = 1,  .max = UINT16_MAX}')
+$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1000,  .max = 1325}', '.rest_name = "coreVoltage",                        .min = 1,  .max = UINT16_MAX}')
+$nvsText = $nvsText.Replace('.rest_name = "coreVoltage",                        .min = 1000,  .max = 1400}', '.rest_name = "coreVoltage",                        .min = 1,  .max = UINT16_MAX}')
 [System.IO.File]::WriteAllText($nvs, $nvsText, $utf8)
 $vcoreNow = [System.IO.File]::ReadAllText($vcore)
 $vcoreRaised = $vcoreNow.Replace("config.TPS546_INIT_VOUT_MAX = 1.325f;", "config.TPS546_INIT_VOUT_MAX = 1.60f;")
 $vcoreRaised = $vcoreRaised.Replace("config.TPS546_INIT_VOUT_MAX = 1.45f;", "config.TPS546_INIT_VOUT_MAX = 1.60f;")
 $vcoreRaised = $vcoreRaised.Replace("config.TPS546_INIT_VOUT_MIN = 1.00f;", "config.TPS546_INIT_VOUT_MIN = 0.70f;")
-$vcoreRaised = $vcoreRaised.Replace("if (volts < 1.00f) volts = 1.00f;", "if (volts < 1.10f) volts = 1.10f;")
-$vcoreRaised = $vcoreRaised.Replace("if (volts > 1.30f) volts = 1.30f;", "if (volts > 1.225f) volts = 1.225f;")
-$vcoreRaised = $vcoreRaised.Replace("if (volts > 1.150f) volts = 1.150f;", "if (volts > 1.225f) volts = 1.225f;")
-$vcoreRaised = $vcoreRaised.Replace("if (volts > 1.325f) volts = 1.325f;", "if (volts > 1.225f) volts = 1.225f;")
+$vcoreRaised = [regex]::Replace($vcoreRaised, 'if \(volts < 1\.10f\) volts = 1\.10f;\s*if \(volts > 1\.225f\) volts = 1\.225f;', @'
+bool custom = nvs_config_get_bool(NVS_CONFIG_OVERCLOCK_ENABLED);
+            if (custom) {
+                if (volts < 0.70f) volts = 0.70f;
+                if (volts > 1.52f) volts = 1.52f;
+            } else {
+                if (volts < 1.00f) volts = 1.00f;
+                if (volts > 1.25f) volts = 1.25f;
+            }
+'@)
 if ($vcoreRaised -ne $vcoreNow) {
     [System.IO.File]::WriteAllText($vcore, $vcoreRaised, $utf8)
-    Write-Host "601a core command stops at 1225 mV."
+    Write-Host "601a core voltage follows the AxeOS list unless custom clock is unlocked."
+}
+$vcoreNow = [System.IO.File]::ReadAllText($vcore)
+if ($vcoreNow.Contains("nvs_config_get_bool") -and -not $vcoreNow.Contains('#include "nvs_config.h"')) {
+    $vcoreFixed = $vcoreNow.Replace('#include "vcore.h"', "#include `"vcore.h`"`r`n#include `"nvs_config.h`"")
+    if ($vcoreFixed -eq $vcoreNow) {
+        Write-Host "Could not include nvs_config.h from vcore.c."
+        exit 1
+    }
+    [System.IO.File]::WriteAllText($vcore, $vcoreFixed, $utf8)
+    Write-Host "vcore.c includes nvs_config.h so the custom voltage clamp compiles."
 }
 $pmNow = [System.IO.File]::ReadAllText($pm)
 $pmRaised = $pmNow.Replace("if (core_voltage > 1300) core_voltage = 1300;", "if (core_voltage > 1225) core_voltage = 1225;")
@@ -621,19 +682,31 @@ if ($pmRaised -ne $pmNow) {
     [System.IO.File]::WriteAllText($pm, $pmRaised, $utf8)
     $pmNow = $pmRaised
 }
-if (-not $pmNow.Contains("601a 25 MHz steps")) {
+if (-not $pmNow.Contains("601a axeos clock")) {
     $held = @'
-        /* 601a voltage and clock clamp */
-        /* 601a 25 MHz steps */
-        if (GLOBAL_STATE->DEVICE_CONFIG.family.id == GAMMA_12V) {
+        /* 601a axeos clock */
+        if (GLOBAL_STATE->DEVICE_CONFIG.family.id == GAMMA_12V && !nvs_config_get_bool(NVS_CONFIG_OVERCLOCK_ENABLED)) {
+            const uint16_t axe_mhz[] = {400, 490, 525, 550, 600, 625};
+            const uint16_t axe_mv[] = {1000, 1060, 1100, 1150, 1200, 1250};
             uint16_t saved_voltage = core_voltage;
             float saved_frequency = asic_frequency;
-            if (core_voltage > 1225) core_voltage = 1225;
-            if (core_voltage < 1100) core_voltage = 1100;
-            core_voltage = (uint16_t)(((core_voltage + 12) / 25) * 25);
-            if (asic_frequency > 650.0f) asic_frequency = 650.0f;
-            if (asic_frequency < 400.0f) asic_frequency = 400.0f;
-            asic_frequency = (float)(((int)(asic_frequency + 12.5f) / 25) * 25);
+            uint16_t best_mv = axe_mv[0];
+            uint16_t best_mhz = axe_mhz[0];
+            int i;
+            for (i = 0; i < 6; i++) {
+                int dv = (int)axe_mv[i] - (int)core_voltage;
+                int bv = (int)best_mv - (int)core_voltage;
+                if (dv < 0) dv = -dv;
+                if (bv < 0) bv = -bv;
+                if (dv < bv) best_mv = axe_mv[i];
+                int df = (int)axe_mhz[i] - (int)asic_frequency;
+                int bf = (int)best_mhz - (int)asic_frequency;
+                if (df < 0) df = -df;
+                if (bf < 0) bf = -bf;
+                if (df < bf) best_mhz = axe_mhz[i];
+            }
+            core_voltage = best_mv;
+            asic_frequency = (float)best_mhz;
             if (core_voltage != saved_voltage) {
                 nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, core_voltage);
                 ESP_LOGW(TAG, "601a voltage held at %u mV", core_voltage);
@@ -646,11 +719,11 @@ if (-not $pmNow.Contains("601a 25 MHz steps")) {
 '@
     $pmHeld = [regex]::Replace($pmNow, '(?s)/\* 601a voltage and clock clamp \*/\s*if \(GLOBAL_STATE->DEVICE_CONFIG\.family\.id == GAMMA_12V\) \{.*?\n        \}', $held.Trim(), 1)
     if ($pmHeld -eq $pmNow) {
-        Write-Host "Could not hold a saved clock on the 25 MHz and 25 mV steps."
+        Write-Host "Could not hold the clock on the AxeOS frequency and voltage list."
         exit 1
     }
     [System.IO.File]::WriteAllText($pm, $pmHeld, $utf8)
-    Write-Host "A saved clock is pulled onto 400 to 650 MHz and 1100 to 1225 mV, in steps of 25."
+    Write-Host "A locked clock uses the AxeOS list. Custom frequency and voltage stay when overclock is unlocked."
 }
 
 $http = Join-Path $root "main\http_server\http_server.c"
